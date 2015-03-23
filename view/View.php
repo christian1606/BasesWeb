@@ -13,10 +13,26 @@
  */
 class View {
 
+    /**
+     * Template is the name of a file in templates/$template.tpl.php
+     * 
+     * @var string 
+     */
     private $template;
+    
+    /**
+     * Assoc array of the vars to be passed to a template file
+     * @var array 
+     */
     private $params;
 
-    public function __construct($template, $params) {
+    /**
+     * Constructor for a view
+     * 
+     * @param string $template
+     * @param array $params
+     */
+    public function __construct($template, $params = array()) {
         $this->template = $template;
         $this->params = $params;
     }

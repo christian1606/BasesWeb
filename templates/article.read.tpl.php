@@ -5,6 +5,8 @@ if ($article) {
 ?>
 <h2>Lecture d'un article</h2>
 
+
+
 <article id="<?php echo $article->id; ?>">
 	<h1><?php echo $article->title; ?></h1>
 	<p><?php echo nl2br($article->content); ?></p>

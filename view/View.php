@@ -1,5 +1,4 @@
 <?php
-
 /*
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
@@ -26,12 +25,13 @@ class View {
      */
     private $params;
 
-    /**
-     * Constructor for a view
-     * 
-     * @param string $template
-     * @param array $params
-     */
+/**
+ * construct view
+ * 
+ * @param string $template
+ * @param array $params
+ * @return $this Description
+ */
     public function __construct($template, $params = array()) {
         $this->template = $template;
         $this->params = $params;

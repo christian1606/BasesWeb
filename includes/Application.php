@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Application is the main class of our website
+ * Application is the singleton class of our website
  *
  * @author humanbooster
  */
@@ -12,15 +12,39 @@ class Application {
     private $content;
     private $db;
     
+    private static $_instance = null;
+     
+    
+    
     /**
      * Constructor of the Application on a given PDO object
      * 
      * @param PDO $db
      */
-    function __construct($db) {
-        $this->db = $db;
+    private function __construct() {
+      //  $this->db = $db;
+      //  $ObjDb = self::getInstance();
     }
 
+    
+    public function setDb($db) { 
+           $this->db = $db;
+           return $this;
+    }
+    /**
+     * Méthode qui crée l'unique instance de la classe si elle n'existe pas encore puis la retourne.
+     *
+     * @param void
+     * @return Singleton
+     */
+    public static function &getInstance() {
+        if (is_null(self::$_instance)) {
+            self::$_instance = new Application();
+        }
+        return self::$_instance;
+    }
+    
+    
     /**
      * This is the main method of our App. Will look for a controller
      * and action in GET and dispatch our request
@@ -36,52 +60,8 @@ class Application {
         $actionName = (isset($_GET['action']) ? $_GET['action'] : "index");
         $actionName = strtolower($actionName);
 
-        /** DEPREC - retrocompatibilité * */
-        $page = (isset($_GET['page']) ? $_GET['page'] : "DEPREC");
-        if ($page != "DEPREC") {
-            // on nous a passé une page, gérons là mais alertons l'utilisateur
-            $this->addMessage(0, "warning", "page est deprec, il faut utiliser le controller et l'action");
-            switch ($page) {
-                case "article_read":
-                    $entityName = "Article";
-                    $actionName = "read";
-                    break;
-                case "article_delete":
-                    $entityName = "Article";
-                    $actionName = "delete";
-                    break;
-                case "article_add":
-                case "article_edit":
-                    $entityName = "Article";
-                    $actionName = "edit";
-                    break;
-                case "article_list":
-                    $entityName = "Article";
-                    $actionName = "index";
-                    break;
-            }
-        }
-
-        // III. / IV. On charge les fichiers nécessaires, et on instancie les classes de reco, controller
-        // on retravaille la var obtenue pour obtenir un nom de la forme "ArticleController"
-        $controllerName = $entityName . "Controller";
-        // on inclut le controller
-        include("controller/" . $controllerName . ".php");
-        // on inclut l'entité
-        include("model/" . $entityName . ".php");
-
-        // Repo - @todo Utiliser un gestionnaire de repo et les charger
-        // depuis les actions de controller
-        $repoName = ucfirst(strtolower($entityName)) . "Repository";
-        include("model/" . $repoName . ".php");
-
-
-        // on instancie un nouveau repo
-        //$repo = new $repoName($this->db);
-
-        // on instancie le controller
-        $controller = new $controllerName($this);
-
+        // II à IV sont maintenant dans loadDep
+        $controller = $this->loadDependencies($entityName);
 
         // V. On regarde si l'action de controller existe, puis on la charge
         // on retravaille la var obtenue pour obtenir un nom de la forme "indexAction"
@@ -133,19 +113,86 @@ class Application {
     }
 
     /**
-     * Will try to find a service - include and instance it if
+     * Load model entity and controller. Returns true if it can, false if it failed.
+     * 
+     * @param string $entityName
+     * @return boolean
+     */
+    private function loadDependencies($entityName) {
+        // load entity
+        if (!$this->loadEntity($entityName))
+            return false;
+        
+        $controllerName = $entityName . "Controller";
+        return $this->loadController($controllerName);
+        
+        
+    }
+
+    /**
+     * Try to include and load a controller
+     * 
+     * @param string $controllerName
+     * @return Controller|boolean
+     */
+    private function loadController($controllerName) {
+
+        // on inclut le controller
+        /** @todo Vérifier que le fichier existe * */
+        $filename = "controller/" . $controllerName . ".php";
+
+        // on teste l'existence du fichier
+        if (file_exists($filename)) {
+            // on l'inclut s'il existe
+            /** @todo vérifier s'il faut un include_once **/
+            require($filename);
+
+            // on l'instancie
+            $controller = new $controllerName($this);
+
+            return $controller;
+       
+        }
+        return false;
+    }
+    
+    /**
+     * Try to include and load an entity
+     * 
+     * @param string $entityName
+     * @return boolean
+     */
+    private function loadEntity($entityName) {
+        $filename = "model/" . $entityName . ".php";
+
+        // on teste l'existence du fichier
+        if (file_exists($filename)) {
+            // on l'inclut s'il existe
+            /** @todo vérifier s'il faut un include_once **/
+            require($filename);
+
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Try to find/load a service - include and instance it if
      * needed, then returns it.
      * 
      * @example services/RepositoryService.php see RepositoryService for an example
      * 
-     * @param type $id
-     * @return type
+     * @param string $id
+     * @return object
      */
     function getService($id) {
+        // id du service
         $id = strtolower($id);
+        // si le service existe déjà on le retourne
         if (isset($this->services[$id]))
             return $this->services[$id];
         else {
+            // sinon on le charge
             $class = ucfirst($id) . "Service";
             $filename = "services/" . $class . ".php";
             if (file_exists($filename)) {
@@ -154,6 +201,8 @@ class Application {
                 return $this->services[$id];
             }
         }
+        // enfin, si on a rien retourné, c'est qu'on a rien trouvé
+        Application::addMessage(0, "error", "Impossible de charger le service " . $id);
         return null;
     }
 
@@ -162,11 +211,9 @@ class Application {
      */
     static private function showMessages() {
         if (isset($_SESSION['messages'])) {
-            // on affiche un bloc pour chaque message
-            foreach ($_SESSION['messages'] as $msg) {
-                echo '<p class="message-' . $msg['type'] . '">[' . $msg['code'] . '] ' . $msg['lib'] . "</p>\n";
-            }
 
+            $messages = new View("global.messages", array("messages" => $_SESSION['messages']));
+            echo $messages->getHtml();
             // du coup on peut supprimer les messages
             unset($_SESSION['messages']);
         }
@@ -207,13 +254,13 @@ class Application {
         if ($die)
             exit();
     }
-    
+
     /**
      * Returns the PDO $db object
      * 
      * @return PDO
      */
-    function getDb() {
+    function &getDb() {
         return $this->db;
     }
 
